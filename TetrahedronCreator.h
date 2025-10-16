@@ -130,7 +130,6 @@ public:
 
         // Direction vector of the line
         Point_3D AB{B.x - A.x, B.y - A.y, B.z - A.z};
-        int index = 0;
         for (const auto pid: candidate_points) {
 
             // Vector AP

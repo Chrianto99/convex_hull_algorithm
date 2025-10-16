@@ -11,8 +11,12 @@
 #include "array"
 #include "cmath"
 
+
 struct Point_3D {
     double x, y, z;
+    std::unordered_set<int> visible_fids;
+
+
 
     Point_3D() = default;
 
@@ -83,7 +87,7 @@ public:
         return false;
     }
 
-    int operator[](int i) const {
+    int operator[](int i) const  {
         return vertex_indices[i];
     }
 
@@ -114,12 +118,21 @@ namespace std {
 struct Face {
 
 public:
+    int id;
     int vertex_indices[3];
     Point_3D normal_vec;
+    std::array<Edge, 3> edges;
+    std::unordered_set<int> outside_pids;
+
 
 
     Face(const int &p1, const int &p2, const int &p3)
-            : vertex_indices{p1, p2, p3} {}
+            : vertex_indices{p1, p2, p3} {
+        edges[0] = Edge(p1, p2);
+        edges[1] = Edge(p1, p3);
+        edges[2] = Edge(p2, p3);
+        id = p1 + p2 + p3;
+    }
 
     void set_normal_vec(double x, double y, double z) {
         normal_vec = Point_3D(x, y, z);

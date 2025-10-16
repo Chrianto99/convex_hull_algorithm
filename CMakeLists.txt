@@ -7,5 +7,5 @@ add_executable(convex_hull_3d main.cpp
         convex_hull_3D.h
         Face.h
         TetrahedronCreator.h
-        BipartiteGraph.h
-        CustomUnorderedSet.h)
+        ConflictGraph.h
+        ConflictGraph.h)

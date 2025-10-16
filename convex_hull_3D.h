@@ -17,14 +17,12 @@
 #include "map"
 #include "array"
 #include "TetrahedronCreator.h"
-#include "BipartiteGraph.h"
-#include "CustomUnorderedSet.h"
+#include "ConflictGraph.h"
 
 template<size_t N>
 class convex_hull_3D {
 
     TetrahedronCreator<N> tetrahedronCreator;
-
 
 public:
 
@@ -38,51 +36,79 @@ public:
 
         std::vector<Face> tetrahedron_faces = tetrahedron.faces;
 
-        BipartiteGraph bGraph;
+        ConflictGraph conflictGraph;
 
-        for (int i = 0; i < points.size(); ++i) bGraph.insert_right(i);
 
-        for (auto &f: tetrahedron_faces) bGraph.insert_left(f);
+        for (auto point: points) conflictGraph.insert_point(point);
 
-        update_conflict_graph(bGraph, tetrahedron.centroid);
+        for (auto &f: tetrahedron_faces) conflictGraph.insert_face(f);
+
+        update_conflict_graph(conflictGraph, tetrahedron.centroid);
 
         return tetrahedron_faces;
 
     }
 
-    void update_conflict_graph(BipartiteGraph &bGraph, Point_3D &centroid, std::array<Point_3D, N> &points) {
+    void update_conflict_graph(ConflictGraph &conflictGraph, Point_3D &centroid) {
 
-        if (bGraph.has_no_edges()) return;
+        if (conflictGraph.get_points_map().empty()) return;
 
-        for (auto &left_node: bGraph.get_left_nodes()) {
-            Face &face = left_node.face;
+        // Calculate normals
+        for (auto &[fid ,face] : conflictGraph.get_face_map()) {
             tetrahedronCreator.calculate_normal(face, centroid);
 
-            for (auto &right_node: bGraph.get_right_nodes()) {
-                Point_3D &candidate_point = points[right_node.point_id];
-                Point_3D A = points[face[0]];
+            for (auto &[pid ,point] : conflictGraph.get_points_map()) {
+
+                Point_3D A =  conflictGraph.get_points_map()[face[0]];
                 Point_3D n = face.normal_vec;
 
-                Point_3D AP{candidate_point.x - A.x, candidate_point.y - A.y, candidate_point.z - A.z};
+                Point_3D AP{point.x - A.x, point.y - A.y, point.z - A.z};
                 double dist = n.x * AP.x + n.y * AP.y + n.z * AP.z;
-                if (dist > 0) bGraph.connect_nodes(&left_node, &right_node);
+                if (dist > 0) {
+                    face.outside_pids.insert(pid);
+                    point.visible_fids.insert(fid);
+                }
             }
 
         }
 
-        if (bGraph.has_no_edges()) return;
-
-        std::vector<Face> new_faces = find_new_faces(bGraph);
-        update_conflict_graph(bGraph, centroid, points);
+        std::vector<Face> new_faces = find_new_faces(conflictGraph);
+        update_conflict_graph(conflictGraph, centroid);
     }
 
-    std::vector<Face> find_new_faces(BipartiteGraph &bGraph) {
+    std::vector<Face> find_new_faces(ConflictGraph &conflictGraph) {
 
-        CustomUnorderedSet<Edge> edge_set;
+        std::unordered_map<int, Face> face_map = conflictGraph.get_face_map();
+        std::unordered_map<int, Point_3D> point_map = conflictGraph.get_points_map();
 
-        for (auto &right_node: bGraph.get_right_nodes()) {
+        //Iterate all faces in conflict graph
+        for (auto &[fid, face] : face_map) {
 
-            if (right_node.has_no_edges()) continue;
+            // Find the furthest outside point
+            int furthest_point_id = conflictGraph.get_point_furthest_from_face(face);
+
+            Point_3D& furthest_point = conflictGraph.get_points_map().at(furthest_point_id);
+
+            // Find the horizon edges
+            std::unordered_set<Edge> horizon_edges;
+
+            for (auto fid : furthest_point.visible_fids){
+
+                Face& visible_face = face_map.at(fid);
+
+                for (auto& edge : visible_face.edges) {
+                    if (horizon_edges.contains(edge)) horizon_edges.erase(edge);
+                    else horizon_edges.insert(edge);
+                }
+            }
+
+            // Connect new faces
+            for (auto edge : horizon_edges){
+                face_map.emplace((edge[0], edge[1], furthest_point_id));
+            }
+            // Erase previous face
+            face_map.erase(fid);
+            point_map.erase(furthest_point_id);
 
         }
 
@@ -107,56 +133,6 @@ public:
         return points;
     }
 
-
-
-
-//    static std::vector<Point_3D> find_outside_points(const Face &face, const std::set<Point_3D> &points) {
-//
-//        std::vector<Point_3D> outside_points;
-//
-//        // Compute normal
-//        Point_3D A = face.vertices[0];
-//        Point_3D n = face.normal_vec;
-//
-//        // Find outside points
-//        for (const auto &P: points) {
-//            if (P == face.vertices[0] || P == face.vertices[1] || P == face.vertices[2]) continue;
-//            Point_3D AP{P.x - A.x, P.y - A.y, P.z - A.z};
-//            double dist = n.x * AP.x + n.y * AP.y + n.z * AP.z;
-//            if (dist > 0) outside_points.push_back(P);
-//        }
-//
-//        return outside_points;
-//    }
-
-
-
-//    static std::vector<Face> find_new_faces(BipartiteGraph& bGraph) {
-//
-//
-//        for (auto &left_node: bGraph.get_left_nodes()) {
-//
-//            if (left_node.has_no_edges()) continue;
-//
-//            Face& face = left_node.face;
-//            double max_distance = 0;
-//            NodeRight* furthest_point_node;
-//            for (auto right_node : left_node.edges){
-//                Point_3D& out_point = right_node->out_point;
-//
-//                double distance_from_face = get_distance_from_face(out_point, face);
-//                if (distance_from_face > max_distance) {
-//                    max_distance = distance_from_face;
-//                    furthest_point_node = right_node;
-//                }
-//            }
-//
-//        }
-//
-//
-//
-//
-//    }
 
 
 };
